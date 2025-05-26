@@ -6,64 +6,93 @@ import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 contract Staking is Ownable {
-    address public stakingToken;
-    address public admin;
-    uint public stakingPeriod;
-    uint public minStakingAmount;
-    uint public rewardPerToken;
-
-    mapping(address => uint) public userBalance;
-    mapping(address => uint) public depositTime;
-    mapping(address => uint) public claimedRewards;
-
-    event ChangeStakingPeriod(uint newStakingPeriod);
-    event Deposit(address user, uint amount);
-    event Withdraw(address user, uint amount);
-    event EthReceived(uint amount);
-
-    constructor(address _stakingToken, address _owner, uint _stakingPeriod, uint _minStakingAmount) Ownable(_owner) {
-        stakingToken = _stakingToken;
-        stakingPeriod = _stakingPeriod;
-        minStakingAmount = _minStakingAmount;
+    struct LockedBalance {
+        uint balance;
+        uint unlockTimestamp;
     }
 
-    function deposit(uint _amount) external {
+    address public stakingToken;
+    address public admin;
+
+    uint public minStakingAmount;
+    uint public rewardPerToken;
+    uint public totalStaked;
+    uint public lockDuration;
+
+    mapping(address => uint) public userBalance;
+    mapping(address => LockedBalance) public userLockedBalance;
+    mapping(address => uint) public claimedRewards;
+    mapping(address => uint) public rewards;
+    mapping(address => uint) public rewardPerTokenPaid;
+
+    event ChangeStakingPeriod(uint newStakingPeriod);
+    event Staked(address user, uint amount);
+    event RequestWithdraw(address user, uint amount);
+    event Withdrawn(address user, uint amount);
+    event EthReceived(uint amount);
+    event RewardsClaimed(address user, uint amount);
+
+    constructor(address _stakingToken, address _owner, uint _minStakingAmount) Ownable(_owner) {
+        stakingToken = _stakingToken;
+        minStakingAmount = _minStakingAmount;
+        lockDuration = 7 days;
+    }
+
+    modifier updateRewards(address _user) {
+        rewards[_user] = earned(_user);
+        rewardPerTokenPaid[_user] = rewardPerToken;
+        _;
+    }
+
+    function earned(address _user) public view returns (uint) {
+        return (userBalance[_user] * (rewardPerToken - rewardPerTokenPaid[_user])) / 1e18 + rewards[_user];
+    }
+
+    function stake(uint _amount) external updateRewards(msg.sender) {
         require(_amount >= minStakingAmount, "Not enough amount.");
+
+        totalStaked += _amount;
+
         IERC20(stakingToken).transferFrom(msg.sender, address(this), _amount);
 
         userBalance[msg.sender] += _amount;
-        depositTime[msg.sender] = block.timestamp;
 
-        emit Deposit(msg.sender, _amount);
+        emit Staked(msg.sender, _amount);
+    }
+
+    function requestWithdraw(uint _amount) public updateRewards(msg.sender) {
+        require(_amount <= userBalance[msg.sender], "Balance too low.");
+        userBalance[msg.sender] -= _amount;
+        userLockedBalance[msg.sender].balance += _amount;
+        userLockedBalance[msg.sender].unlockTimestamp = block.timestamp + lockDuration;
+        emit RequestWithdraw(msg.sender, _amount);
     }
 
     function withdraw(uint _amount) external {
-        require(userBalance[msg.sender] >= _amount, "Not enough balance.");
-        userBalance[msg.sender] -= _amount;
+        require(block.timestamp >= userLockedBalance[msg.sender].unlockTimestamp, "Wait until unlock time.");
+        require(userLockedBalance[msg.sender].balance >= _amount, "Not enough balance.");
+        userLockedBalance[msg.sender].balance -= _amount;
         IERC20(stakingToken).transfer(msg.sender, _amount);
+        emit Withdrawn(msg.sender, _amount);
     }
 
-    function claimRewards() external {
-        require(userBalance[msg.sender] >= minStakingAmount, "Not staking.");
-        uint elapsePeriod = block.timestamp - depositTime[msg.sender];
-        require(elapsePeriod >= stakingPeriod, "Wait to staking period");
-        depositTime[msg.sender] = block.timestamp;
-        (bool success, ) = msg.sender.call{value: rewardPerToken}("");
+    function claimRewards() external updateRewards(msg.sender) {
+        uint userRewards = rewards[msg.sender];
+        require(userRewards > 0, "Not rewards.");
+        rewards[msg.sender] = 0;
+        claimedRewards[msg.sender] += userRewards;
+        (bool success, ) = msg.sender.call{value: userRewards}("");
         require(success, "Transfer failed");
-    }
-
-    function getUserRewards(address _user) public view returns (uint) {
-        uint balance = userBalance[_user];
-        uint rewards = balance * rewardPerToken;
-        return rewards - claimedRewards[_user];
+        emit RewardsClaimed(msg.sender, userRewards);
     }
 
     receive() external payable onlyOwner {
+        rewardPerToken += (msg.value * 1e18) / totalStaked;
         emit EthReceived(msg.value);
     }
 
-    function changeStakingPeriod(uint newStakingPeriod) external onlyOwner {
-        stakingPeriod = newStakingPeriod;
+    function changeLockDuration(uint _newDuration) external onlyOwner {
+        lockDuration = _newDuration;
     }
 
     function changeMinStakingAmount(uint newMinStakingAmount) external onlyOwner {
