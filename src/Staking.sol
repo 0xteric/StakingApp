@@ -49,7 +49,7 @@ contract Staking is Ownable {
     }
 
     function stake(uint _amount) external updateRewards(msg.sender) {
-        require(_amount >= minStakingAmount, "Not enough amount.");
+        require(_amount >= minStakingAmount, "Insufficient amount.");
 
         totalStaked += _amount;
 
@@ -78,7 +78,7 @@ contract Staking is Ownable {
 
     function claimRewards() external updateRewards(msg.sender) {
         uint userRewards = rewards[msg.sender];
-        require(userRewards > 0, "Not rewards.");
+        require(userRewards > 0, "No rewards.");
         rewards[msg.sender] = 0;
         claimedRewards[msg.sender] += userRewards;
         (bool success, ) = msg.sender.call{value: userRewards}("");

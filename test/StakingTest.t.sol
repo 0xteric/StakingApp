@@ -32,6 +32,16 @@ contract StakingTest is Test {
         vm.stopPrank();
     }
 
+    function testStakeInsufficientAmount() public {
+        vm.startPrank(user1);
+        uint8 amountToStake = 5;
+        stakingToken.mint(amountToStake);
+        stakingToken.approve(address(staking), amountToStake);
+
+        vm.expectRevert("Insufficient amount.");
+        staking.stake(amountToStake);
+    }
+
     function testRequestWithdraw() public {
         testStake();
         uint8 amountToWithdraw = 5;
@@ -46,7 +56,16 @@ contract StakingTest is Test {
         assertEq(unlockTimestamp, block.timestamp + staking.lockDuration());
     }
 
-    function testWithdrawSuccess() public {
+    function testRequestWithdrawLowBalance() public {
+        testStake();
+
+        vm.prank(user1);
+
+        vm.expectRevert("Balance too low.");
+        staking.requestWithdraw(15);
+    }
+
+    function testWithdraw() public {
         uint8 amountToStake = 10;
         testChangeLockDuration();
 
@@ -71,6 +90,15 @@ contract StakingTest is Test {
 
         vm.expectRevert("Wait until unlock time.");
         staking.withdraw(5);
+    }
+
+    function testWithdrawLowBalance() public {
+        testChangeLockDuration();
+        testRequestWithdraw();
+        vm.prank(user1);
+
+        vm.expectRevert("Not enough balance.");
+        staking.withdraw(15);
     }
 
     function testDistributeRewards() public {
@@ -128,8 +156,23 @@ contract StakingTest is Test {
         assertEq(staking.rewards(user1), staking.rewards(user2));
     }
 
+    function testClaimNoRewards() public {
+        vm.prank(user1);
+
+        vm.expectRevert("No rewards.");
+        staking.claimRewards();
+    }
+
     function testChangeLockDuration() public {
         vm.prank(owner);
         staking.changeLockDuration(0 seconds);
+    }
+
+    function testChangeMinStakingAmount() public {
+        vm.prank(owner);
+        uint newMinStakingAmount = 5;
+        staking.changeMinStakingAmount(newMinStakingAmount);
+
+        assertEq(staking.minStakingAmount(), newMinStakingAmount);
     }
 }
