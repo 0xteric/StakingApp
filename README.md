@@ -1,66 +1,27 @@
-## Foundry
+# Staking Smart Contract
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository contains a simple and secure Ethereum staking contract that allows users to stake an ERC20 token, earn ETH rewards, and withdraw their stake after a lock period.
 
-Foundry consists of:
+## 📜 Contract Overview
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+The `Staking` smart contract enables users to:
 
-## Documentation
+- Stake ERC20 tokens
+- Accumulate ETH rewards distributed proportionally based on stake
+- Request withdrawal of their stake, subject to a time lock
+- Claim earned ETH rewards at any time
+- Allows the contract owner to adjust parameters like minimum stake and lock duration
 
-https://book.getfoundry.sh/
+## ⚙️ How It Works
 
-## Usage
+1. **Staking**  
+   Users stake a specified ERC20 token by calling `stake(uint amount)` after approving the contract to transfer tokens.
 
-### Build
+2. **Withdraw Request**  
+   Users initiate a withdrawal request using `requestWithdraw(uint amount)`, which sets a 7-day (by default) lock before tokens can be withdrawn.
 
-```shell
-$ forge build
-```
+3. **Withdraw**  
+   After the lock period, users can call `withdraw(uint amount)` to retrieve their tokens.
 
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+4. **Reward Distribution**  
+   ETH sent to the contract (via `receive()`) by the owner is distributed among stakers. Rewards can be claimed using `claimRewards()`.
