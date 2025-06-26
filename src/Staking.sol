@@ -38,16 +38,28 @@ contract Staking is Ownable {
         lockDuration = 7 days;
     }
 
+    /**
+     * Updates the user rewards and rewardPerToken snapshot of a user
+     * @param _user user address
+     */
     modifier updateRewards(address _user) {
         rewards[_user] = earned(_user);
         rewardPerTokenPaid[_user] = rewardPerToken;
         _;
     }
 
+    /**
+     * Returns the amount of rewards claimable of a user
+     * @param _user user address
+     */
     function earned(address _user) public view returns (uint) {
         return (userBalance[_user] * (rewardPerToken - rewardPerTokenPaid[_user])) / 1e18 + rewards[_user];
     }
 
+    /**
+     * Stakes the amount of tokens selected
+     * @param _amount amount to stake
+     */
     function stake(uint _amount) external updateRewards(msg.sender) {
         require(_amount >= minStakingAmount, "Insufficient amount.");
 
@@ -60,6 +72,10 @@ contract Staking is Ownable {
         emit Staked(msg.sender, _amount);
     }
 
+    /**
+     * Starts an staking unlock period for the amount of staked tokens selected
+     * @param _amount amount of tokens to unstake
+     */
     function requestWithdraw(uint _amount) public updateRewards(msg.sender) {
         require(_amount <= userBalance[msg.sender], "Balance too low.");
         userBalance[msg.sender] -= _amount;
@@ -68,6 +84,10 @@ contract Staking is Ownable {
         emit RequestWithdraw(msg.sender, _amount);
     }
 
+    /**
+     * Withdraws the amount of tokens selected from the unlocked requested tokens
+     * @param _amount amount to withdraw
+     */
     function withdraw(uint _amount) external {
         require(block.timestamp >= userLockedBalance[msg.sender].unlockTimestamp, "Wait until unlock time.");
         require(userLockedBalance[msg.sender].balance >= _amount, "Not enough balance.");
@@ -76,6 +96,9 @@ contract Staking is Ownable {
         emit Withdrawn(msg.sender, _amount);
     }
 
+    /**
+     * Claims the rewards accumulated
+     */
     function claimRewards() external updateRewards(msg.sender) {
         uint userRewards = rewards[msg.sender];
         require(userRewards > 0, "No rewards.");
@@ -86,15 +109,26 @@ contract Staking is Ownable {
         emit RewardsClaimed(msg.sender, userRewards);
     }
 
+    /**
+     * Receives the rewards
+     */
     receive() external payable onlyOwner {
         rewardPerToken += (msg.value * 1e18) / totalStaked;
         emit EthReceived(msg.value);
     }
 
+    /**
+     * Updates Unlock period duration
+     * @param _newDuration new duration
+     */
     function changeLockDuration(uint _newDuration) external onlyOwner {
         lockDuration = _newDuration;
     }
 
+    /**
+     * Updates the minimum amount of tokens needed to stake
+     * @param newMinStakingAmount new amount
+     */
     function changeMinStakingAmount(uint newMinStakingAmount) external onlyOwner {
         minStakingAmount = newMinStakingAmount;
     }
